@@ -1,0 +1,6 @@
+/* App-level resets — page-specific styles live in their own CSS modules */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}

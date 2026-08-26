@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.env
+venv/
+.venv/
+
+# Node
+node_modules/
+
+# Database
+backend/chroma_db/
+
+# Misc
+.DS_Store
+
+# Uploaded/local data
+data/
+backend/data/
+
+# Environment files
+.env
+.env.*
+!.env.example
