@@ -5,6 +5,8 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.routes import health
 from app.api.routes import documents
+from app.api.routes import search
+from app.api.routes import rag
 
 # ---------------------------------------------------------------------------
 # Application factory
@@ -56,6 +58,8 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 app.include_router(health.router, prefix="/api")
 app.include_router(documents.router, prefix="/api/documents")
+app.include_router(search.router, prefix="/api")
+app.include_router(rag.router, prefix="/api")
 
 # ---------------------------------------------------------------------------
 # Root redirect

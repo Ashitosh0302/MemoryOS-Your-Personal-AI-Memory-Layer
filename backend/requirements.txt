@@ -5,3 +5,6 @@ pydantic-settings
 python-dotenv
 python-multipart
 PyMuPDF
+sentence-transformers
+chromadb
+openai

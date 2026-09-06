@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import Navbar from '../components/Navbar'
 import { uploadDocument } from '../services/documentService'
+import { askMemory } from '../services/ragService'
 import './Dashboard.css'
 
 // ── Upload states ────────────────────────────────────────────────────────────
@@ -13,6 +14,15 @@ export default function Dashboard() {
   const [uploadError, setUploadError] = useState('')
   const [selectedFile, setSelectedFile] = useState(null)
   const [isDraggingOver, setIsDraggingOver] = useState(false)
+
+  // ── Ask / RAG states ────────────────────────────────────────────────────────
+  // idle | loading | success | error | empty
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchState, setSearchState] = useState('idle')
+  const [ragAnswer, setRagAnswer] = useState('')
+  const [ragSources, setRagSources] = useState([])
+  const [searchError, setSearchError] = useState('')
+  const [queriesAskedCount, setQueriesAskedCount] = useState(0)
 
   // ── File selection handlers ────────────────────────────────────────────────
 
@@ -63,6 +73,34 @@ export default function Dashboard() {
     } catch (err) {
       setUploadError(err.message || 'Upload failed. Please try again.')
       setUploadState('error')
+    }
+  }
+
+  // ── Ask handler (RAG) ──────────────────────────────────────────────────────
+
+  async function handleSearch() {
+    if (!searchQuery.trim() || searchState === 'loading') return
+
+    setSearchState('loading')
+    setSearchError('')
+    setRagAnswer('')
+    setRagSources([])
+
+    try {
+      const response = await askMemory(searchQuery.trim(), 5)
+
+      setRagAnswer(response?.answer || '')
+      setRagSources(response?.sources || [])
+      setQueriesAskedCount((prev) => prev + 1)
+
+      if (!response?.answer && (response?.sources || []).length === 0) {
+        setSearchState('empty')
+      } else {
+        setSearchState('success')
+      }
+    } catch (err) {
+      setSearchError(err.message || 'Request failed. Please try again.')
+      setSearchState('error')
     }
   }
 
@@ -251,17 +289,122 @@ export default function Dashboard() {
               </p>
             </div>
 
-            <div className="card__search-mock" aria-label="Search placeholder (coming soon)">
-              <span className="card__search-icon">🔍</span>
-              <span className="card__search-placeholder">
-                e.g. "What were the key points from last week's report?"
-              </span>
-            </div>
+            <form
+              className="search-form"
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleSearch()
+              }}
+            >
+              <div className="search-input-wrap">
+                <span className="search-input-icon" aria-hidden="true">🔍</span>
+                <input
+                  id="search-input"
+                  type="text"
+                  className="search-input"
+                  placeholder='e.g. "What were the electrician rates?"'
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  disabled={searchState === 'loading'}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleSearch()
+                    }
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="search-clear-btn"
+                    onClick={() => {
+                      setSearchQuery('')
+                      setSearchState('idle')
+                      setRagAnswer('')
+                      setRagSources([])
+                    }}
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
 
-            <button className="btn btn--primary" disabled aria-disabled="true"
-              id="ask-btn">
-              Ask MemoryOS
-            </button>
+              <button
+                type="submit"
+                className="btn btn--primary"
+                disabled={!searchQuery.trim() || searchState === 'loading'}
+                id="ask-btn"
+              >
+                {searchState === 'loading' ? 'Thinking…' : 'Ask MemoryOS'}
+              </button>
+            </form>
+
+            {/* State Banners */}
+            {searchState === 'loading' && (
+              <div className="search-banner search-banner--loading" id="search-loading-banner">
+                <span className="upload-spin">⏳</span> Searching your memory and generating answer…
+              </div>
+            )}
+
+            {searchState === 'error' && (
+              <div className="search-banner search-banner--error" id="search-error-banner">
+                <span>⚠️</span> {searchError}
+              </div>
+            )}
+
+            {searchState === 'empty' && (
+              <div className="search-banner search-banner--empty" id="search-empty-banner">
+                <span>🔍</span> No matching memories found. Try uploading a document first.
+              </div>
+            )}
+
+            {/* AI Answer */}
+            {searchState === 'success' && ragAnswer && (
+              <div className="rag-answer" id="rag-answer-section">
+                <div className="rag-answer__header">
+                  <span className="rag-answer__icon">✨</span>
+                  <span className="rag-answer__label">AI Answer</span>
+                </div>
+                <p className="rag-answer__text">{ragAnswer}</p>
+              </div>
+            )}
+
+            {/* Sources / Evidence */}
+            {searchState === 'success' && ragSources.length > 0 && (
+              <div className="search-results" id="search-results-section">
+                <div className="search-results-header">
+                  <span className="search-results-title">Sources / Evidence</span>
+                  <span className="search-results-count">
+                    {ragSources.length} {ragSources.length === 1 ? 'source' : 'sources'}
+                  </span>
+                </div>
+
+                <div className="search-results-list">
+                  {ragSources.map((item, idx) => {
+                    const sourceName = item.metadata?.source || item.metadata?.filename || 'Uploaded Document'
+                    const chunkIdx = item.metadata?.chunk_index !== undefined ? ` (Chunk #${item.metadata.chunk_index + 1})` : ''
+                    const distFormatted = item.distance !== undefined && item.distance !== null
+                      ? `Distance: ${Number(item.distance).toFixed(3)}`
+                      : null
+
+                    return (
+                      <div className="search-result-card" key={item.id || idx}>
+                        <div className="search-result-meta">
+                          <span className="search-result-source">
+                            📄 {sourceName}{chunkIdx}
+                          </span>
+                          {distFormatted && (
+                            <span className="search-result-distance">{distFormatted}</span>
+                          )}
+                        </div>
+                        <p className="search-result-text">{item.text}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </article>
         </div>
       </section>
@@ -270,10 +413,10 @@ export default function Dashboard() {
       <section className="stats-section" aria-label="Status overview">
         <div className="stats-grid">
           {[
-            { label: 'Memories Stored',  value: '0',   icon: '🧠' },
-            { label: 'Files Indexed',    value: '0',   icon: '📂' },
-            { label: 'Queries Asked',    value: '0',   icon: '💬' },
-            { label: 'Last Activity',    value: '—',   icon: '⏱' },
+            { label: 'Memories Stored',  value: uploadResult ? 'Indexed' : '0',   icon: '🧠' },
+            { label: 'Files Indexed',    value: uploadResult ? '1' : '0',   icon: '📂' },
+            { label: 'Queries Asked',    value: queriesAskedCount.toString(),   icon: '💬' },
+            { label: 'Last Activity',    value: queriesAskedCount > 0 || uploadResult ? 'Just now' : '—',   icon: '⏱' },
           ].map((s) => (
             <div className="stat-card" key={s.label} id={`stat-${s.label.toLowerCase().replace(/\s+/g, '-')}`}>
               <span className="stat-card__icon">{s.icon}</span>

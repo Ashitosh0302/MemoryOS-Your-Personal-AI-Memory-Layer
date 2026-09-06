@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 10
     ALLOWED_EXTENSIONS: str = "pdf,txt"
 
+    # LLM Settings
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_BASE_URL: str = ""
+
+
     @property
     def cors_origins(self) -> List[str]:
         origins = [self.FRONTEND_URL]
