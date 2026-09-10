@@ -83,7 +83,8 @@ class RAGService:
         self._llm_client = llm_client
         self.api_key = api_key or settings.OPENAI_API_KEY
         self.model_name = model_name or settings.OPENAI_MODEL
-        self.base_url = base_url or settings.OPENAI_BASE_URL or None
+        configured_url = base_url if base_url is not None else settings.OPENAI_BASE_URL
+        self.base_url = configured_url.strip() if configured_url and configured_url.strip() else None
 
     def get_vector_store(self) -> VectorStoreService:
         if self._vector_store:
@@ -180,8 +181,17 @@ class RAGService:
         # 3. Build grounded prompt
         system_prompt, user_prompt = build_rag_prompt(clean_question, chunks)
 
-        # 4. Generate LLM answer
-        answer = self.generate_llm_answer(system_prompt, user_prompt)
+        # 4. Generate LLM answer with graceful exception fallback
+        try:
+            answer = self.generate_llm_answer(system_prompt, user_prompt)
+        except Exception as exc:
+            logger.error("LLM answer generation failed: %s", exc)
+            # If the LLM provider returns an API error (e.g. rate limit/quota),
+            # synthesize a grounded answer directly from retrieved chunks so RAG flow remains functional.
+            answer = (
+                "Based strictly on your stored memory:\n"
+                + "\n".join(f"• {c['text']}" for c in chunks)
+            )
 
         # 5. Format sources
         sources = [

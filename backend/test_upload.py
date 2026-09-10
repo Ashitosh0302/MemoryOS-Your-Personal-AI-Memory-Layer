@@ -9,6 +9,14 @@ import tempfile
 import urllib.error
 import urllib.request
 
+# Ensure standard output supports UTF-8 on Windows
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 BASE = "http://127.0.0.1:8000"
 PASS = "\u2705 PASS"
 FAIL = "\u274c FAIL"

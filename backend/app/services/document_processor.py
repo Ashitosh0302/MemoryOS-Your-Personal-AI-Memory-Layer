@@ -114,13 +114,17 @@ def _extract_txt_text(path: Path) -> tuple[str, int]:
     Raises ValueError if the file cannot be decoded.
     """
     try:
-        content = path.read_text(encoding="utf-8")
+        content = path.read_text(encoding="utf-8-sig")
     except UnicodeDecodeError:
         # Fallback: try latin-1 which never fails
         try:
             content = path.read_text(encoding="latin-1")
         except Exception as exc:
             raise ValueError(f"Cannot read text file: {exc}") from exc
+
+    # Clean any Windows CP1252/latin-1 mojibake for UTF-8 symbols (e.g. â‚¹ -> ₹)
+    if "â‚¹" in content or "\u00e2\u201a\u00b9" in content:
+        content = content.replace("â‚¹", "₹").replace("\u00e2\u201a\u00b9", "₹")
 
     if not content.strip():
         raise ValueError("Text file is empty or contains only whitespace.")
@@ -133,9 +137,9 @@ def _extract_txt_text(path: Path) -> tuple[str, int]:
 # ---------------------------------------------------------------------------
 
 
-def process_document(saved_path: Path, original_filename: str) -> DocumentMetadata:
+def process_document(saved_path: Path, original_filename: str) -> tuple[DocumentMetadata, str]:
     """
-    Extract text from *saved_path* and return metadata.
+    Extract text from *saved_path* and return (metadata, full_text).
 
     Parameters
     ----------
@@ -146,7 +150,8 @@ def process_document(saved_path: Path, original_filename: str) -> DocumentMetada
 
     Returns
     -------
-    DocumentMetadata
+    tuple[DocumentMetadata, str]
+        Metadata object and full extracted text.
     """
     ext = Path(original_filename).suffix.lstrip(".").lower()
     size = saved_path.stat().st_size
@@ -158,10 +163,11 @@ def process_document(saved_path: Path, original_filename: str) -> DocumentMetada
     else:
         raise ValueError(f"Unexpected file type: .{ext}")
 
-    return DocumentMetadata(
+    meta = DocumentMetadata(
         filename=original_filename,
         file_type=ext,
         size=size,
         pages=pages,
         text_length=len(text),
     )
+    return meta, text
